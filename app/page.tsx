@@ -108,14 +108,14 @@ export default function CheckinPage() {
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
+      <div className="h-dvh flex items-center justify-center bg-background">
         <p className="text-2xl text-muted-foreground">Carregando...</p>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
+    <div className="h-dvh flex flex-col bg-background overflow-hidden">
 
       {/* ── Confirmação full-screen ──────────────────────────────────────────── */}
       {confirmacao && (
@@ -134,26 +134,46 @@ export default function CheckinPage() {
       )}
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <header className="shrink-0 bg-[#152426] px-4 py-3 flex items-center gap-3">
-        <Image
-          src="/logo.png"
-          alt="Cheer"
-          width={64}
-          height={64}
-          className="object-contain shrink-0 drop-shadow-md"
-          priority
-        />
-        <span className="font-display text-[#23ADBA] text-xl leading-none whitespace-nowrap">
-          Cheer Presença
-        </span>
+      <header className="shrink-0 bg-[#152426] px-4 pt-3 pb-2.5 sm:py-3">
+        {/* Mobile: duas linhas / Tablet+: uma linha */}
+        <div className="flex items-center gap-2.5">
+          <Image
+            src="/logo.png"
+            alt="Cheer"
+            width={40}
+            height={40}
+            className="object-contain shrink-0 drop-shadow-md sm:w-[56px] sm:h-[56px]"
+            priority
+          />
+          <span className="font-display text-[#23ADBA] text-lg leading-none sm:text-xl">
+            Cheer Presença
+          </span>
 
+          {/* Tablet+: info do treino inline à direita */}
+          {treinoAtivo && (
+            <div className="hidden sm:flex ml-auto items-center gap-2 text-sm">
+              <span className="font-semibold text-[#F5F5F5]">{treinoAtivo.descricao}</span>
+              <span className="text-[#96D3DE]/50">·</span>
+              <span className="text-[#96D3DE]">{treinoAtivo.horario_inicio.slice(0, 5)}</span>
+              <span className="text-[#96D3DE]/50">·</span>
+              <span className="text-[#96D3DE]">
+                {new Date(treinoAtivo.data + "T12:00:00").toLocaleDateString("pt-BR", {
+                  day: "2-digit",
+                  month: "2-digit",
+                })}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Mobile: info do treino em linha separada */}
         {treinoAtivo && (
-          <div className="ml-auto flex items-center gap-2 text-sm text-right">
+          <div className="sm:hidden mt-1.5 flex items-center gap-1.5 text-sm pl-0.5">
             <span className="font-semibold text-[#F5F5F5]">{treinoAtivo.descricao}</span>
-            <span className="text-[#96D3DE]/50">·</span>
+            <span className="text-[#96D3DE]/40">·</span>
             <span className="text-[#96D3DE]">{treinoAtivo.horario_inicio.slice(0, 5)}</span>
-            <span className="text-[#96D3DE]/50 hidden sm:block">·</span>
-            <span className="text-[#96D3DE] hidden sm:block">
+            <span className="text-[#96D3DE]/40">·</span>
+            <span className="text-[#96D3DE]">
               {new Date(treinoAtivo.data + "T12:00:00").toLocaleDateString("pt-BR", {
                 day: "2-digit",
                 month: "2-digit",
