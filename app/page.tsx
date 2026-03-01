@@ -138,12 +138,12 @@ export default function CheckinPage() {
         <Image
           src="/logo.png"
           alt="Cheer"
-          width={46}
-          height={46}
-          className="object-contain shrink-0"
+          width={64}
+          height={64}
+          className="object-contain shrink-0 drop-shadow-md"
           priority
         />
-        <span className="font-display text-[#23ADBA] text-lg leading-none whitespace-nowrap hidden sm:block">
+        <span className="font-display text-[#23ADBA] text-xl leading-none whitespace-nowrap">
           Cheer Presença
         </span>
 

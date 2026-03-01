@@ -26,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className={`${russoOne.variable} ${inter.variable} antialiased`}>
+      <body className={`${russoOne.variable} ${inter.variable} antialiased`} suppressHydrationWarning>
         {children}
         <Toaster richColors position="top-center" />
       </body>
