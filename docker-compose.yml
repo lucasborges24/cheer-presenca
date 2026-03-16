@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  cheer_db:
+    image: postgres:18-alpine
+    container_name: cheer_db_local
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: cheer_presenca_local
+    ports:
+      - "5433:5432"
+    volumes:
+      - cheer_db_data:/var/lib/postgresql/data
+
+volumes:
+  cheer_db_data:
