@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { treinos } from "@/lib/schema";
+import { treinos, presencas } from "@/lib/schema";
 import { eq, desc } from "drizzle-orm";
 
 export async function GET(request: Request) {
@@ -59,12 +59,25 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
+  const force = searchParams.get("force") === "true";
 
   if (!id) {
     return NextResponse.json({ error: "ID é obrigatório" }, { status: 400 });
   }
 
-  await db.delete(treinos).where(eq(treinos.id, Number(id)));
+  try {
+    if (force) {
+      await db.delete(presencas).where(eq(presencas.treino_id, Number(id)));
+    }
 
-  return NextResponse.json({ ok: true });
+    await db.delete(treinos).where(eq(treinos.id, Number(id)));
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Erro ao excluir treino:", error);
+    return NextResponse.json(
+      { error: "Erro ao excluir treino. Pode haver presenças vinculadas." },
+      { status: 400 }
+    );
+  }
 }

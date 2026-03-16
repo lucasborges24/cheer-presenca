@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 type Treino = { id: number; data: string; descricao: string; horario_inicio: string };
+type Presenca = { id: number; integrante_nome: string; horario_checkin: string; atrasado: boolean };
 
 const HORARIOS_RAPIDOS = ["09:00", "10:00", "19:30"];
 
@@ -41,6 +43,11 @@ export default function TreinosPage() {
 
   // Confirmação de exclusão
   const [confirmandoId, setConfirmandoId] = useState<number | null>(null);
+
+  // Dialog de presenças vinculadas
+  const [dialogAberto, setDialogAberto] = useState(false);
+  const [presencasVinculadas, setPresencasVinculadas] = useState<Presenca[]>([]);
+  const [treinoParaExcluir, setTreinoParaExcluir] = useState<number | null>(null);
 
   useEffect(() => { loadTreinos(); }, []);
 
@@ -94,11 +101,41 @@ export default function TreinosPage() {
     }
   }
 
-  async function deleteTreino(id: number) {
+  async function handlePreDelete(id: number) {
     try {
-      await fetch(`/api/treinos?id=${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/presenca?treino_id=${id}`);
+      if (!res.ok) throw new Error("Erro ao buscar presenças");
+      
+      const presencas: Presenca[] = await res.json();
+      
+      if (presencas.length > 0) {
+        setPresencasVinculadas(presencas);
+        setTreinoParaExcluir(id);
+        setConfirmandoId(null);
+        setDialogAberto(true);
+      } else {
+        // Nenhuma presença vinculada, pode deletar direto
+        deleteTreino(id, false);
+      }
+    } catch {
+      toast.error("Erro ao verificar presenças vinculadas");
+    }
+  }
+
+  async function deleteTreino(id: number, force: boolean = false) {
+    try {
+      const res = await fetch(`/api/treinos?id=${id}&force=${force}`, { method: "DELETE" });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || "Erro ao excluir treino");
+        return;
+      }
+      
       toast.success("Treino excluído");
       setConfirmandoId(null);
+      setDialogAberto(false);
+      setTreinoParaExcluir(null);
       loadTreinos();
     } catch {
       toast.error("Erro ao excluir treino");
@@ -252,7 +289,7 @@ export default function TreinosPage() {
                         <span className="text-sm text-muted-foreground flex-1">
                           Excluir este treino permanentemente?
                         </span>
-                        <Button size="sm" variant="destructive" onClick={() => deleteTreino(treino.id)}>
+                        <Button size="sm" variant="destructive" onClick={() => handlePreDelete(treino.id)}>
                           Confirmar
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => setConfirmandoId(null)}>
@@ -278,6 +315,33 @@ export default function TreinosPage() {
           )}
         </CardContent>
       </Card>
+      <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir treino com presenças vinculadas</DialogTitle>
+            <DialogDescription>
+              Este treino possui {presencasVinculadas.length} presença(s) confirmada(s). Ao excluir o treino, todas essas presenças serão apagadas. Deseja excluir mesmo assim?
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="max-h-60 overflow-y-auto mt-4 px-2">
+            <ul className="list-disc list-inside space-y-1">
+              {presencasVinculadas.map(p => (
+                <li key={p.id} className="text-sm text-foreground">
+                  {p.integrante_nome}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <DialogFooter className="mt-6">
+            <Button variant="outline" onClick={() => setDialogAberto(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={() => treinoParaExcluir && deleteTreino(treinoParaExcluir, true)}>
+              Apagar tudo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

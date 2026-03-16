@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { presencas, treinos } from "@/lib/schema";
+import { presencas, treinos, integrantes } from "@/lib/schema";
 import { and, eq } from "drizzle-orm";
 
 export async function GET(request: Request) {
@@ -15,8 +15,16 @@ export async function GET(request: Request) {
   }
 
   const result = await db
-    .select()
+    .select({
+      id: presencas.id,
+      integrante_id: presencas.integrante_id,
+      treino_id: presencas.treino_id,
+      horario_checkin: presencas.horario_checkin,
+      atrasado: presencas.atrasado,
+      integrante_nome: integrantes.nome,
+    })
     .from(presencas)
+    .innerJoin(integrantes, eq(presencas.integrante_id, integrantes.id))
     .where(eq(presencas.treino_id, Number(treino_id)));
 
   return NextResponse.json(result);
