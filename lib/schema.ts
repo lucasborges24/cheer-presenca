@@ -9,6 +9,7 @@ import {
   integer,
   unique,
 } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 
 export const integrantes = pgTable("integrantes", {
   id: serial("id").primaryKey(),
@@ -48,3 +49,41 @@ export const presencas = pgTable(
   },
   (t) => [unique().on(t.integrante_id, t.treino_id)]
 );
+
+export const times = pgTable("times", {
+  id: serial("id").primaryKey(),
+  nome: text("nome").notNull(),
+  criado_em: timestamp("criado_em").defaultNow().notNull(),
+});
+
+export const integrantes_times = pgTable(
+  "integrantes_times",
+  {
+    integrante_id: integer("integrante_id")
+      .references(() => integrantes.id, { onDelete: "cascade" })
+      .notNull(),
+    time_id: integer("time_id")
+      .references(() => times.id, { onDelete: "cascade" })
+      .notNull(),
+  },
+  (t) => [unique().on(t.integrante_id, t.time_id)]
+);
+
+export const integrantesRelations = relations(integrantes, ({ many }) => ({
+  times: many(integrantes_times),
+}));
+
+export const timesRelations = relations(times, ({ many }) => ({
+  integrantes: many(integrantes_times),
+}));
+
+export const integrantesTimesRelations = relations(integrantes_times, ({ one }) => ({
+  integrante: one(integrantes, {
+    fields: [integrantes_times.integrante_id],
+    references: [integrantes.id],
+  }),
+  time: one(times, {
+    fields: [integrantes_times.time_id],
+    references: [times.id],
+  }),
+}));
