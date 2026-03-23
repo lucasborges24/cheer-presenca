@@ -44,8 +44,9 @@ export const presencas = pgTable(
     treino_id: integer("treino_id")
       .references(() => treinos.id)
       .notNull(),
-    horario_checkin: timestamp("horario_checkin").defaultNow().notNull(),
-    atrasado: boolean("atrasado").notNull(),
+    status: text("status", { enum: ["esperado", "presente", "falta"] }).default("esperado").notNull(),
+    horario_checkin: timestamp("horario_checkin"),
+    atrasado: boolean("atrasado").default(false).notNull(),
   },
   (t) => [unique().on(t.integrante_id, t.treino_id)]
 );

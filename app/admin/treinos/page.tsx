@@ -8,6 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
+type Integrante = { id: number; nome: string };
+type Time = { 
+  id: number; 
+  nome: string;
+  integrantes: { integrante_id: number; time_id: number }[];
+};
 type Treino = { id: number; data: string; descricao: string; horario_inicio: string };
 type Presenca = { id: number; integrante_nome: string; horario_checkin: string; atrasado: boolean };
 
@@ -19,8 +25,6 @@ function dataLocal(offsetDias = 0) {
   return d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 }
 
-// Retorna yyyy-mm-dd do próximo dia da semana (0=dom, 2=ter, 4=qui)
-// Sempre avança para a próxima ocorrência (nunca hoje)
 function proximoDiaSemana(diaSemana: number): string {
   const d = new Date();
   const atual = d.getDay();
@@ -32,33 +36,56 @@ function proximoDiaSemana(diaSemana: number): string {
 
 export default function TreinosPage() {
   const [treinos, setTreinos] = useState<Treino[]>([]);
+  const [integrantes, setIntegrantes] = useState<Integrante[]>([]);
+  const [times, setTimes] = useState<Time[]>([]);
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+
   const [data, setData] = useState(dataLocal());
   const [descricao, setDescricao] = useState("");
   const [horarioInicio, setHorarioInicio] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // Edição inline de descrição
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [descricaoEditando, setDescricaoEditando] = useState("");
 
-  // Confirmação de exclusão
   const [confirmandoId, setConfirmandoId] = useState<number | null>(null);
 
-  // Dialog de presenças vinculadas
   const [dialogAberto, setDialogAberto] = useState(false);
   const [presencasVinculadas, setPresencasVinculadas] = useState<Presenca[]>([]);
   const [treinoParaExcluir, setTreinoParaExcluir] = useState<number | null>(null);
 
-  useEffect(() => { loadTreinos(); }, []);
+  useEffect(() => { loadDados(); }, []);
 
-  async function loadTreinos() {
+  async function loadDados() {
+    try {
+      const [resT, resI, resTm] = await Promise.all([
+        fetch("/api/treinos"),
+        fetch("/api/integrantes"),
+        fetch("/api/times")
+      ]);
+      const treinosData = await resT.json();
+      setTreinos(treinosData);
+      
+      const intsData = await resI.json();
+      setIntegrantes(intsData);
+      
+      const timesData = await resTm.json();
+      setTimes(timesData);
+      
+      setSelecionados(new Set(intsData.map((i: Integrante) => i.id)));
+    } catch {
+      toast.error("Erro ao carregar dados");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadTreinosOnly() {
     try {
       const res = await fetch("/api/treinos");
       setTreinos(await res.json());
     } catch {
       toast.error("Erro ao carregar treinos");
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -68,17 +95,27 @@ export default function TreinosPage() {
       toast.error("Preencha todos os campos");
       return;
     }
+    if (selecionados.size === 0) {
+      toast.error("Selecione ao menos um participante");
+      return;
+    }
+
     try {
       const res = await fetch("/api/treinos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data, descricao, horario_inicio: horarioInicio }),
+        body: JSON.stringify({ 
+          data, 
+          descricao, 
+          horario_inicio: horarioInicio,
+          integrantesIds: Array.from(selecionados) 
+        }),
       });
       if (!res.ok) { toast.error("Erro ao adicionar treino"); return; }
       setDescricao("");
       setHorarioInicio("");
       toast.success("Treino adicionado!");
-      loadTreinos();
+      loadTreinosOnly();
     } catch {
       toast.error("Erro ao adicionar treino");
     }
@@ -95,7 +132,7 @@ export default function TreinosPage() {
       if (!res.ok) { toast.error("Erro ao salvar"); return; }
       toast.success("Descrição atualizada!");
       setEditandoId(null);
-      loadTreinos();
+      loadTreinosOnly();
     } catch {
       toast.error("Erro ao salvar descrição");
     }
@@ -114,7 +151,6 @@ export default function TreinosPage() {
         setConfirmandoId(null);
         setDialogAberto(true);
       } else {
-        // Nenhuma presença vinculada, pode deletar direto
         deleteTreino(id, false);
       }
     } catch {
@@ -127,8 +163,8 @@ export default function TreinosPage() {
       const res = await fetch(`/api/treinos?id=${id}&force=${force}`, { method: "DELETE" });
       
       if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || "Erro ao excluir treino");
+        const bdData = await res.json();
+        toast.error(bdData.error || "Erro ao excluir treino");
         return;
       }
       
@@ -136,10 +172,35 @@ export default function TreinosPage() {
       setConfirmandoId(null);
       setDialogAberto(false);
       setTreinoParaExcluir(null);
-      loadTreinos();
+      loadTreinosOnly();
     } catch {
       toast.error("Erro ao excluir treino");
     }
+  }
+
+  function toggleTime(timeId: number) {
+    const time = times.find(t => t.id === timeId);
+    if (!time) return;
+    const idsTime = time.integrantes.map(it => it.integrante_id);
+    const todosDoTimeSelecionados = idsTime.every(id => selecionados.has(id));
+
+    setSelecionados(prev => {
+      const next = new Set(prev);
+      idsTime.forEach(id => {
+        if (todosDoTimeSelecionados) next.delete(id);
+        else next.add(id);
+      });
+      return next;
+    });
+  }
+
+  function toggleIntegrante(id: number) {
+    setSelecionados(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   return (
@@ -150,8 +211,6 @@ export default function TreinosPage() {
         <CardHeader><CardTitle>Novo Treino</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={addTreino} className="space-y-5">
-
-            {/* Data */}
             <div>
               <label className="text-sm font-medium mb-2 block">Data</label>
               <div className="flex flex-wrap gap-2 mb-2">
@@ -178,16 +237,8 @@ export default function TreinosPage() {
                 onChange={(e) => setData(e.target.value)}
                 className="cursor-pointer w-full h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
-              {data && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {new Date(data + "T12:00:00").toLocaleDateString("pt-BR", {
-                    weekday: "long", day: "2-digit", month: "long",
-                  })}
-                </p>
-              )}
             </div>
 
-            {/* Horário */}
             <div>
               <label className="text-sm font-medium mb-2 block">Horário de Início</label>
               <div className="flex flex-wrap gap-2 mb-2">
@@ -215,14 +266,56 @@ export default function TreinosPage() {
               />
             </div>
 
-            {/* Descrição */}
             <div>
-              <label className="text-sm font-medium mb-2 block">Descrição</label>
+              <label className="text-sm font-medium mb-2 block">Descricao</label>
               <Input
                 placeholder="Ex: Treino de stunts"
                 value={descricao}
                 onChange={(e) => setDescricao(e.target.value)}
               />
+            </div>
+
+            <div className="pt-2 border-t">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium block">Participantes ({selecionados.size}/{integrantes.length})</label>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setSelecionados(new Set(integrantes.map(i => i.id)))}>Todos</Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setSelecionados(new Set())}>Nenhum</Button>
+                </div>
+              </div>
+              
+              <div className="mb-3 flex flex-wrap gap-2">
+                {times.map(t => {
+                  const idsTime = t.integrantes.map(it => it.integrante_id);
+                  const todosSel = idsTime.length > 0 && idsTime.every(id => selecionados.has(id));
+                  return (
+                    <Badge 
+                      key={t.id} 
+                      className="cursor-pointer"
+                      variant={todosSel ? "default" : "outline"}
+                      onClick={() => toggleTime(t.id)}
+                    >
+                      Time {t.nome}
+                    </Badge>
+                  );
+                })}
+              </div>
+
+              <div className="max-h-48 overflow-y-auto border rounded-md p-2 bg-muted/20">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-1">
+                  {integrantes.map(i => (
+                    <label key={i.id} className="flex items-center gap-2 text-sm p-1 rounded hover:bg-muted cursor-pointer select-none">
+                      <input 
+                        type="checkbox" 
+                        checked={selecionados.has(i.id)} 
+                        onChange={() => toggleIntegrante(i.id)} 
+                        className="rounded border-input text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                      />
+                      {i.nome}
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <Button type="submit" className="w-full">Adicionar Treino</Button>
@@ -241,7 +334,6 @@ export default function TreinosPage() {
             <div className="space-y-2">
               {treinos.map((treino) => (
                 <div key={treino.id} className="border rounded-lg p-3 space-y-2">
-                  {/* Linha principal */}
                   <div className="flex items-start gap-3">
                     {editandoId === treino.id ? (
                       <div className="flex items-center gap-2 flex-1">
@@ -282,7 +374,6 @@ export default function TreinosPage() {
                     )}
                   </div>
 
-                  {/* Confirmação de exclusão */}
                   {editandoId !== treino.id && (
                     confirmandoId === treino.id ? (
                       <div className="flex items-center gap-2 pt-2 border-t">
@@ -315,20 +406,24 @@ export default function TreinosPage() {
           )}
         </CardContent>
       </Card>
+      
       <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Excluir treino com presenças vinculadas</DialogTitle>
             <DialogDescription>
-              Este treino possui {presencasVinculadas.length} presença(s) confirmada(s). Ao excluir o treino, todas essas presenças serão apagadas. Deseja excluir mesmo assim?
+              Este treino possui {presencasVinculadas.length} presença(s) vinculada(s). Ao excluir o treino, todas essas presenças serão apagadas. Deseja excluir mesmo assim?
             </DialogDescription>
           </DialogHeader>
           
           <div className="max-h-60 overflow-y-auto mt-4 px-2">
             <ul className="list-disc list-inside space-y-1">
               {presencasVinculadas.map(p => (
-                <li key={p.id} className="text-sm text-foreground">
-                  {p.integrante_nome}
+                <li key={p.id} className="text-sm text-foreground flex justify-between">
+                  <span>{p.integrante_nome}</span>
+                  <Badge variant={p.horario_checkin ? "secondary" : "outline"}>
+                    {p.horario_checkin ? "Presente" : "Esperado"}
+                  </Badge>
                 </li>
               ))}
             </ul>

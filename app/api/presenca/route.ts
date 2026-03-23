@@ -21,6 +21,7 @@ export async function GET(request: Request) {
       treino_id: presencas.treino_id,
       horario_checkin: presencas.horario_checkin,
       atrasado: presencas.atrasado,
+      status: presencas.status,
       integrante_nome: integrantes.nome,
     })
     .from(presencas)
@@ -40,25 +41,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // Check for duplicate
-  const existing = await db
-    .select()
-    .from(presencas)
-    .where(
-      and(
-        eq(presencas.integrante_id, integrante_id),
-        eq(presencas.treino_id, treino_id)
-      )
-    );
-
-  if (existing.length > 0) {
-    return NextResponse.json(
-      { error: "Presença já registrada para este integrante neste treino" },
-      { status: 409 }
-    );
-  }
-
-  // Get training info to check lateness
+  // Obter informacoes do treino para calcular se esta atrasado
   const [treino] = await db
     .select()
     .from(treinos)
@@ -71,7 +54,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // Calculate if late: compare current time with horario_inicio + 10min (São Paulo timezone)
+  // Calcular atraso: compara hora atual com horario_inicio + 10min
   const now = new Date();
   const saoPauloTime = new Date(
     now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })
@@ -83,11 +66,48 @@ export async function POST(request: Request) {
 
   const atrasado = saoPauloTime > treinoStart;
 
+  // Verifica se já existe o registro (criado antes, como 'esperado')
+  const existing = await db
+    .select()
+    .from(presencas)
+    .where(
+      and(
+        eq(presencas.integrante_id, integrante_id),
+        eq(presencas.treino_id, treino_id)
+      )
+    );
+
+  if (existing.length > 0) {
+    const reg = existing[0];
+    if (reg.status === "presente") {
+      return NextResponse.json(
+        { error: "Presença já registrada para este integrante neste treino" },
+        { status: 409 }
+      );
+    }
+    
+    // Atualiza para presente
+    const [atualizada] = await db
+      .update(presencas)
+      .set({ 
+        status: "presente", 
+        horario_checkin: saoPauloTime, 
+        atrasado 
+      })
+      .where(eq(presencas.id, reg.id))
+      .returning();
+      
+    return NextResponse.json(atualizada, { status: 200 });
+  }
+
+  // Se nao existia o registro de "esperado", insere com "presente"
   const [nova] = await db
     .insert(presencas)
     .values({
       integrante_id,
       treino_id,
+      status: "presente",
+      horario_checkin: saoPauloTime,
       atrasado,
     })
     .returning();

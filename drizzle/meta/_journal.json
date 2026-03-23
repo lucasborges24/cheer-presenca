@@ -8,6 +8,13 @@
       "when": 1774305194683,
       "tag": "0000_oval_loki",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1774307481993,
+      "tag": "0001_issue_5_treinos",
+      "breakpoints": true
     }
   ]
 }

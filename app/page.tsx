@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 type Integrante = { id: number; nome: string };
 type Treino = { id: number; data: string; descricao: string; horario_inicio: string };
-type Presenca = { integrante_id: number; atrasado: boolean };
+type Presenca = { integrante_id: number; atrasado: boolean; status?: string };
 type Confirmacao = { nome: string; atrasado: boolean };
 
 export default function CheckinPage() {
@@ -23,9 +23,9 @@ export default function CheckinPage() {
 
   useEffect(() => { loadData(); }, []);
 
-  // Define primeiro treino como ativo assim que carregar
+  // Define primeiro treino como ativo se for o único
   useEffect(() => {
-    if (treinos.length > 0 && !treinoAtivoId) {
+    if (treinos.length === 1 && !treinoAtivoId) {
       setTreinoAtivoId(treinos[0].id);
     }
   }, [treinos, treinoAtivoId]);
@@ -98,8 +98,13 @@ export default function CheckinPage() {
   // ── Dados derivados ──────────────────────────────────────────────────────────
   const treinoAtivo = treinos.find((t) => t.id === treinoAtivoId) ?? null;
   const presencasAtivas = treinoAtivoId ? (presencasPorTreino[treinoAtivoId] ?? []) : [];
-  const jaRegistradosIds = new Set(presencasAtivas.map((p) => p.integrante_id));
-  const opcoes = integrantes.filter((i) => !jaRegistradosIds.has(i.id));
+  
+  const esperadosIds = new Set(presencasAtivas.map((p) => p.integrante_id));
+  const jaRegistradosIds = new Set(
+    presencasAtivas.filter((p) => !p.status || p.status === "presente").map((p) => p.integrante_id)
+  );
+  
+  const opcoes = integrantes.filter((i) => esperadosIds.has(i.id) && !jaRegistradosIds.has(i.id));
   const jaPresentes = integrantes.filter((i) => jaRegistradosIds.has(i.id));
   const nomeSelecionado = treinoAtivoId
     ? integrantes.find((i) => i.id === selecionado[treinoAtivoId])?.nome
@@ -183,8 +188,8 @@ export default function CheckinPage() {
         )}
       </header>
 
-      {/* ── Tabs (se houver mais de 1 treino no dia) ────────────────────────── */}
-      {treinos.length > 1 && (
+      {/* ── Tabs (se houver mais de 1 treino no dia e treino já escolhido) ──────── */}
+      {treinos.length > 1 && treinoAtivoId && (
         <div className="shrink-0 flex gap-2 px-4 pt-3">
           {treinos.map((t) => (
             <button
@@ -199,6 +204,25 @@ export default function CheckinPage() {
               {t.descricao}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* ── Tela de Seleção de Treino (quando > 1 e nenhum selecionado) ───────── */}
+      {treinos.length > 1 && !treinoAtivoId && (
+        <div className="flex-1 flex flex-col items-center justify-center p-4">
+          <h2 className="text-2xl font-display text-primary mb-6">Qual treino vamos marcar presença?</h2>
+          <div className="flex flex-col gap-4 w-full max-w-sm">
+            {treinos.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTreinoAtivoId(t.id)}
+                className="cursor-pointer p-5 border-2 border-border/60 rounded-xl text-left bg-card hover:border-primary hover:shadow-md transition-all active:scale-[0.98]"
+              >
+                <div className="font-semibold text-lg">{t.descricao}</div>
+                <div className="text-muted-foreground mt-1 text-sm">{t.horario_inicio.slice(0,5)}</div>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

@@ -23,11 +23,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { data, descricao, horario_inicio } = await request.json();
+  const { data, descricao, horario_inicio, integrantesIds } = await request.json();
 
-  if (!data || !descricao || !horario_inicio) {
+  if (!data || !descricao || !horario_inicio || !Array.isArray(integrantesIds)) {
     return NextResponse.json(
-      { error: "Todos os campos são obrigatórios" },
+      { error: "Todos os campos são obrigatórios, incluindo integrantesIds" },
       { status: 400 }
     );
   }
@@ -36,6 +36,15 @@ export async function POST(request: Request) {
     .insert(treinos)
     .values({ data, descricao, horario_inicio })
     .returning();
+
+  if (integrantesIds.length > 0) {
+    const presencasData = integrantesIds.map((id: number) => ({
+      treino_id: novo.id,
+      integrante_id: id,
+      status: "esperado" as const,
+    }));
+    await db.insert(presencas).values(presencasData);
+  }
 
   return NextResponse.json(novo, { status: 201 });
 }

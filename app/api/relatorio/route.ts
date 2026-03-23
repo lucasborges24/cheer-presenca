@@ -61,37 +61,42 @@ export async function GET(request: Request) {
     );
 
   const resultado = membros.map((m) => {
-    const minhasPresencas = presencasDoMes.filter((p) => p.integrante_id === m.id);
-    const noHorario = minhasPresencas.filter((p) => !p.atrasado).length;
-    const atrasados = minhasPresencas.filter((p) => p.atrasado).length;
-    const total = minhasPresencas.length;
-    const faltas = totalTreinos - total;
-    const percFrequencia = totalTreinos > 0 ? (total / totalTreinos) * 100 : 0;
+    const minhasPresencasGlobais = presencasDoMes.filter((p) => p.integrante_id === m.id);
+    const minhasPresencasPresentes = minhasPresencasGlobais.filter((p) => p.status === "presente");
+    const totalTreinosEsperado = minhasPresencasGlobais.length;
+    
+    const noHorario = minhasPresencasPresentes.filter((p) => !p.atrasado).length;
+    const atrasados = minhasPresencasPresentes.filter((p) => p.atrasado).length;
+    const total = minhasPresencasPresentes.length;
+    const faltas = totalTreinosEsperado - total;
+    const percFrequencia = totalTreinosEsperado > 0 ? (total / totalTreinosEsperado) * 100 : 0;
     const percPontualidade = total > 0 ? (noHorario / total) * 100 : 0;
 
-    const atingePresenca = percFrequencia >= config.limiar_presenca;
+    const atingePresenca = totalTreinosEsperado > 0 ? percFrequencia >= config.limiar_presenca : false;
     const atingePontualidade = config.limiar_pontualidade === 0 || percPontualidade >= config.limiar_pontualidade;
-    const elegivel = totalTreinos > 0 && atingePresenca && atingePontualidade;
+    const elegivel = totalTreinosEsperado > 0 && atingePresenca && atingePontualidade;
 
-    const detalhes = treinosOrdenados.map((treino) => {
-      const p = minhasPresencas.find((p) => p.treino_id === treino.id);
-      return {
-        treino_id: treino.id,
-        data: treino.data,
-        descricao: treino.descricao,
-        horario_inicio: treino.horario_inicio,
-        presente: !!p,
-        horario_checkin: p?.horario_checkin ?? null,
-        atrasado: p?.atrasado ?? null,
-      };
-    });
+    const detalhes = treinosOrdenados
+      .filter(treino => minhasPresencasGlobais.some(p => p.treino_id === treino.id))
+      .map((treino) => {
+        const p = minhasPresencasGlobais.find((p) => p.treino_id === treino.id);
+        return {
+          treino_id: treino.id,
+          data: treino.data,
+          descricao: treino.descricao,
+          horario_inicio: treino.horario_inicio,
+          presente: p?.status === "presente",
+          horario_checkin: p?.horario_checkin ?? null,
+          atrasado: p?.atrasado ?? null,
+        };
+      });
 
     return {
       id: m.id, nome: m.nome, ativo: m.ativo,
       total_presencas: total, faltas, no_horario: noHorario, atrasados,
       percentual_pontualidade: Math.round(percPontualidade),
       percentual_frequencia: Math.round(percFrequencia),
-      total_treinos: totalTreinos,
+      total_treinos: totalTreinosEsperado,
       elegivel, detalhes,
     };
   });
