@@ -60,10 +60,23 @@ export async function GET(request: Request) {
       )})`
     );
 
+  const DATA_MIGRACAO = new Date("2026-03-24T00:00:00.000Z"); // Data de corte para o novo recurso
+  
   const resultado = membros.map((m) => {
     const minhasPresencasGlobais = presencasDoMes.filter((p) => p.integrante_id === m.id);
     const minhasPresencasPresentes = minhasPresencasGlobais.filter((p) => p.status === "presente");
-    const totalTreinosEsperado = minhasPresencasGlobais.length;
+    
+    // Treinos antes da issue #5 não tinham dados de "esperado". Assumimos que a pessoa era esperada em todos eles.
+    let totalTreinosEsperado = 0;
+    for (const t of treinosOrdenados) {
+      const isLegacy = new Date(t.criado_em) < DATA_MIGRACAO;
+      if (isLegacy) {
+        totalTreinosEsperado++;
+      } else {
+        const isExpectedNew = minhasPresencasGlobais.some((p) => p.treino_id === t.id);
+        if (isExpectedNew) totalTreinosEsperado++;
+      }
+    }
     
     const noHorario = minhasPresencasPresentes.filter((p) => !p.atrasado).length;
     const atrasados = minhasPresencasPresentes.filter((p) => p.atrasado).length;
@@ -77,7 +90,11 @@ export async function GET(request: Request) {
     const elegivel = totalTreinosEsperado > 0 && atingePresenca && atingePontualidade;
 
     const detalhes = treinosOrdenados
-      .filter(treino => minhasPresencasGlobais.some(p => p.treino_id === treino.id))
+      .filter(treino => {
+        const isLegacy = new Date(treino.criado_em) < DATA_MIGRACAO;
+        const isExpectedNew = minhasPresencasGlobais.some(p => p.treino_id === treino.id);
+        return isLegacy || isExpectedNew;
+      })
       .map((treino) => {
         const p = minhasPresencasGlobais.find((p) => p.treino_id === treino.id);
         return {
